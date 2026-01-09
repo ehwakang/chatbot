@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/assets/css/bootstrap.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script> 
+    <title>KOSHA 가이드 PDF 업로드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .upload-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .upload-area {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #f8f9ff;
+        }
+
+        .upload-area:hover {
+            border-color: #764ba2;
+            background: #f0f1ff;
+            transform: translateY(-2px);
+        }
+
+        .upload-area.dragover {
+            border-color: #764ba2;
+            background: #e8e9ff;
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            color: #667eea;
+        }
+
+        .upload-text h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+        }
+
+        .upload-text p {
+            color: #666;
+            font-size: 0.95rem;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-info p {
+            color: #2e7d32;
+            font-weight: 500;
+        }
+
+        .btn-upload {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+            display: none;
+        }
+
+        .btn-upload.show {
+            display: block;
+        }
+
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-upload:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .message.show {
+            display: block;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .documents-section {
+            margin-top: 40px;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .documents-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .document-list {
+            list-style: none;
+        }
+
+        .document-item {
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9ff;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .document-item:hover {
+            background: #e8e9ff;
+            transform: translateX(5px);
+        }
+
+        .document-item h4 {
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .document-item p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .search-box {
+            margin-bottom: 20px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* 모달 기본 스타일 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 30px;
+            width: 80%;
+            max-width: 1000px;
+            border-radius: 15px;
+        }
+        .modal-header { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .close-modal { font-size: 2rem; cursor: pointer; }
+        
+        /* 편집 폼 스타일 */
+        .edit-section-content, .edit-meta-content {
+          field-sizing: content; /* 내용에 맞게 크기 조절 */
+          min-height: 50px;    /* 최소 높이 설정 */
+        }
+        .edit-group { margin-bottom: 15px; }
+        .edit-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .edit-group input, .edit-group textarea {
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 1rem;
+        }
+        
+        .modal-footer { margin-top: 20px; text-align: right; border-top: 1px solid #eee; padding-top: 15px; }
+        .btn-primary { background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .btn-secondary { background: #999; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 KOSHA 가이드 관리</h1>
+            <p>PDF 파일을 업로드하여 데이터베이스에 저장하세요</p>
+        </div>
+
+        <div class="upload-card">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📤</div>
+                <div class="upload-text">
+                    <h3>PDF 파일을 드래그하거나 클릭하여 선택하세요</h3>
+                    <p>KOSHA 가이드 PDF 파일만 업로드 가능합니다</p>
+                </div>
+                <input type="file" id="fileInput" accept=".pdf">
+            </div>
+
+            <div class="file-info" id="fileInfo">
+                <p>선택된 파일: <span id="fileName"></span></p>
+            </div>
+
+            <button class="btn-upload" id="uploadBtn">업로드 시작</button>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px; color: #667eea;">처리 중...</p>
+            </div>
+
+            <div class="message" id="message"></div>
+        </div>
+
+        <div class="documents-section">
+            <h2>업로드된 문서</h2>
+            
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="문서 검색...">
+            </div>
+
+            <ul class="document-list" id="documentList">
+                <li style="text-align: center; color: #999; padding: 20px;">
+                    문서를 불러오는 중...
+                </li>
+            </ul>
+        </div>
+    </div>
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>문서 데이터 수정</h2>
+                <span class="close-modal" onclick="closeModal()">&times;</span>
+            </div>
+            <div id="editFormContainer"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="closeModal()">취소</button>
+                <button class="btn-primary" id="saveBtn">변경사항 저장</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const message = document.getElementById('message');
+        const loading = document.getElementById('loading');
+        const documentList = document.getElementById('documentList');
+        const searchInput = document.getElementById('searchInput');
+
+        let selectedFile = null;
+
+        // 업로드 영역 클릭 시 파일 선택
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 파일 선택 이벤트
+        fileInput.addEventListener('change', (e) => {
+            handleFileSelect(e.target.files[0]);
+        });
+
+        // 드래그 앤 드롭
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFileSelect(e.dataTransfer.files[0]);
+        });
+
+        function handleFileSelect(file) {
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                showMessage('PDF 파일만 업로드 가능합니다.', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            fileName.textContent = file.name;
+            fileInfo.classList.add('show');
+            uploadBtn.classList.add('show');
+            message.classList.remove('show');
+        }
+
+        // 업로드 버튼 클릭
+        uploadBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            uploadBtn.disabled = true;
+            loading.classList.add('show');
+            message.classList.remove('show');
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage(`업로드 성공: ${data.data.title}`, 'success');
+                    resetForm();
+                    loadDocuments();
+                } else {
+                    showMessage(data.error || '업로드 실패', 'error');
+                }
+            } catch (error) {
+                showMessage('서버 오류가 발생했습니다.', 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                loading.classList.remove('show');
+            }
+        });
+
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = `message ${type} show`;
+        }
+
+        function resetForm() {
+            selectedFile = null;
+            fileInput.value = '';
+            fileInfo.classList.remove('show');
+            uploadBtn.classList.remove('show');
+        }
+
+        // 문서 목록 로드
+        async function loadDocuments() {
+            try {
+                const response = await fetch('/documents');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayDocuments(data.documents);
+                }
+            } catch (error) {
+                documentList.innerHTML = '<li style="text-align: center; color: #f44336; padding: 20px;">문서를 불러올 수 없습니다.</li>';
+            }
+        }
+
+        function displayDocuments(documents) {
+            if (documents.length === 0) {
+                documentList.innerHTML = '<li style="text-align: center; color: #999; padding: 20px;">업로드된 문서가 없습니다.</li>';
+                return;
+            }
+
+            documentList.innerHTML = documents.map(doc => `
+                <li class="document-item" onclick="viewDocument('${doc.document_id}')">
+                    <h4>${doc.document_id}</h4>
+                    <p>${doc.title}</p>
+                    <p style="font-size: 0.8rem; color: #999;">
+                        등록일: ${new Date(doc.created_at).toLocaleDateString('ko-KR')}
+                    </p>
+                </li>
+            `).join('');
+        }
+
+        function viewDocument(documentId) {
+            window.open(`/documents/${documentId}`, '_blank');
+        }
+
+        // 검색 기능
+        let searchTimeout;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(async () => {
+                const query = e.target.value.trim();
+                
+                if (query === '') {
+                    loadDocuments();
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/search?q=${encodeURIComponent(query)}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        displayDocuments(data.results);
+                    }
+                } catch (error) {
+                    console.error('검색 오류:', error);
+                }
+            }, 300);
+        });
+
+        // 페이지 로드 시 문서 목록 가져오기
+        loadDocuments();
+
+        const editModal = document.getElementById('editModal');
+        const editFormContainer = document.getElementById('editFormContainer');
+        let currentEditingId = null;
+
+        // 1. 상세 데이터 불러오기 및 모달 열기
+        async function viewDocument(documentId) {
+            try {
+                const response = await fetch(`/documents/${documentId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentEditingId = documentId;
+                    renderEditForm(data.document);
+                    editModal.style.display = 'block';
+                }
+            } catch (error) {
+                alert('데이터를 불러오지 못했습니다.');
+            }
+        }
+
+        // 2. 데이터를 입력 필드로 변환하여 출력
+        function renderEditForm(doc) {
+            const content = doc.content; // DB의 JSONB 데이터
+            const meta = content.metadata;
+            let html = `
+                <div class="row">
+                <div class="edit-group col-6">
+                    <label>문서 번호 (ID)</label>
+                    <input type="text" id="edit-guide-num" value="${doc.document_id}" disabled>
+                </div>
+                <div class="edit-group col-6">
+                    <label>문서 제목</label>
+                    <input type="text" id="edit-title" value="${doc.title}">
+                </div>
+                </div>
+                <h3 style="margin: 20px 0 10px 0; color: #667eea;">📊 메타데이터</h3>
+                <div class="edit-group">
+                    <label>작성자</label>
+                    <textarea id="edit-authors" class="edit-meta-content">${meta.authors || ''}</textarea>
+                </div>
+                <div class="edit-group">
+                    <label>제·개정 경과</label>
+                    <textarea id="edit-history" class="edit-meta-content">${meta.revision_history || ''}</textarea>
+                </div>
+                <div class="edit-group">
+                    <label>관련 법규</label>
+                    <textarea id="edit-regulation" class="edit-meta-content">${meta.related_regulation || ''}</textarea>
+                </div>
+
+                <h3 style="margin: 20px 0 10px 0; color: #667eea;">📄 본문 섹션 편집</h3>
+            `;
+
+            html += '<h3>본문 섹션</h3>';
+            content.sections.forEach((sec, idx) => {
+                html += `
+                    <div class="edit-group" style="margin-bottom: 20px;">
+                        <label>섹션 ${sec.number}. ${sec.title}</label>
+                        <textarea class="edit-section-content" data-idx="${idx}">${sec.content}</textarea>
+                    </div>
+                `;
+            });
+            editFormContainer.innerHTML = html;
+        }
+
+        // 3. 저장 버튼 클릭 이벤트
+        document.getElementById('saveBtn').addEventListener('click', async () => {
+            const sectionTexts = document.querySelectorAll('.edit-section-content');
+            const updatedData = {
+              title: document.getElementById('edit-title').value,
+              metadata: {
+                authors: document.getElementById('edit-authors').value,
+                revision_history: document.getElementById('edit-history').value,
+                related_regulation: document.getElementById('edit-regulation').value
+              },
+              sections: Array.from(sectionTexts).map((textarea, idx) => ({
+                index: idx,
+                content: textarea.value
+              }))
+            };
+            try {
+                const response = await fetch(`/documents/${currentEditingId}`, {
+                    method: 'PUT', // 수정을 위해 PUT 사용
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedData)
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    alert('저장되었습니다.');
+                    closeModal();
+                    loadDocuments(); // 목록 새로고침
+                }
+            } catch (error) {
+                alert('저장 중 오류가 발생했습니다.');
+            }
+        });
+
+        function closeModal() {
+            editModal.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

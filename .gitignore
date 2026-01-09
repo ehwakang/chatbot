@@ -1,0 +1,39 @@
+# ---- Python 기본 ----
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ---- 가상환경(venv 등) ----
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# ---- 환경변수 파일 ----
+.env
+*.env.*
+
+# ---- 테스트/캐시 ----
+.pytest_cache/
+.mypy_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+
+# ---- 로그/임시 파일 ----
+*.log
+*.tmp
+*.swp
+*~
+
+# ---- IDE / 에디터 ----
+.vscode/
+.idea/
+
+# ---- OS 별 불필요 파일 ----
+.DS_Store
+Thumbs.db
