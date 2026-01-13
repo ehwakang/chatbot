@@ -104,71 +104,110 @@ class PDFProcessor:
       if current_section:
           sections.append(current_section)
       return sections
-      
-    def extract_text_from_pdf(self, filepath):
-        """PDF에서 텍스트 추출 및 NUL 문자 제거"""
-        text = ""
-        with pdfplumber.open(filepath) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text(x_tolerance=2, y_tolerance=2)
-                if page_text:
-                  # \x00 (NUL) 문자를 빈 문자열로 치환하여 제거
-                  text += page_text.replace('\x00', '') + "\n"
-        return text
     
-    def parse_kosha_guide(self, text):
-        """KOSHA 가이드 구조 파싱"""
-        # 빈 줄을 제외하고 순수 텍스트 줄만 리스트로 만듭니다.
-        lines = [line.strip() for line in text.split('\n') if line.strip()]
+    def extract_table_as_markdown(self, page, table_settings=None):
+      """페이지 내 테이블을 추출하여 마크다운 문자열로 변환하되, 헤더성 테이블은 제외"""
+      tables = page.extract_tables(table_settings=table_settings)
+      if not tables: return ""
+      md_output = ""
+      exclude_keywords = ["KOSHA GUIDE", "한국산업안전보건공단"] # 제외하고 싶은 헤더 키워드
+      for table in tables:
+        # 빈 표나 헤더만 있는 표 방지
+        all_cells = [str(cell) for row in table for cell in row if cell]
+        all_text = "".join(all_cells)
+        # 테이블의 모든 텍스트를 하나로 합쳐서 키워드 체크
+        if not all_text or any(kw in all_text for kw in exclude_keywords):
+          continue
         
-        document_id = ""
-        title = ""
-        id_line_index = -1
+        # 마크다운 표 생성 로직
+        formatted_rows = []
+        for row in table:
+          # 셀 내 줄바꿈 제거 및 None 처리
+          clean_row = [str(cell).replace('\n', ' ').strip() if cell else "" for cell in row]
+          formatted_rows.append(clean_row)
+        if len(formatted_rows) < 1: continue
         
-        # 1. document_id 추출: 'KOSHA GUIDE' 바로 다음 줄
-        for i, line in enumerate(lines):
-          if 'KOSHA GUIDE' in line.upper():
-            if i + 1 < len(lines):
-                raw_id = lines[i+1]
-                # 모든 공백 제거 및 하이픈 통일
-                document_id = re.sub(r'\s+', '', raw_id).replace('–', '-')
-                id_line_index = i + 1
-                break
-            
-          # 2. title 추출: document_id 다음 줄부터 '2'로 시작하는 숫자 전까지
-          if id_line_index != -1:
-            title_parts = []
-            for j in range(id_line_index + 1, len(lines)):
-                current_line = lines[j]
-                
-                # 중단 조건: '2'로 시작하는 숫자(예: 2020. 10. 또는 2. 적용범위 등)가 나오면 중단
-                if re.match(r'^\d{4}\.', current_line) or (len(title_parts) > 0 and re.match(r'^2', current_line)):
-                    break
-                
-                # 공단 이름이나 페이지 번호 등 불필요한 정보 스킵
-                if any(x in current_line for x in ['한국산업안전보건공단', 'PAGE', 'KOSHA']):
-                    continue
-                    
-                title_parts.append(current_line)
-            
-            # 3. 줄바꿈 자리에 공백 넣으며 합치기 > 남아있는 줄바꿈 제거 > 양 끝 공백 제거
-            title = ' '.join(title_parts).replace('\n', ' ').strip()
-            title = re.sub(r'\s+', ' ', title)
-        
-        return {
-          "document_id": document_id,
-          "title": title if title else "제목 없음",
-          "metadata": {
-            "guide_number": document_id,
-            "publication_date": self._extract_date(text),
-            "publisher": "한국산업안전보건공단",
-            "authors": self._extract_authors(text),
-            "revision_history": self._extract_revision_history(text),
-            "related_regulation": self._extract_related_regulation(text)
-          },
-          "sections": self._parse_sections(text),
-          "forms": self._parse_forms(text)
-        }
+        md_table = "\n"
+        for i, row in enumerate(formatted_rows):
+          md_table += "| " + " | ".join(row) + " |\n"
+          if i == 0: # 마크다운 표 구분선
+            md_table += "| " + " | ".join(["---"] * len(row)) + " |\n"
+        md_output += md_table + "\n"
+          
+      return md_output
+  
+    def extract_text_from_pdf(self, filepath):
+      """PDF에서 텍스트와 테이블을 분리 추출하여 중복 없이 결합"""
+      text = ""
+      # 표 인식을 위한 정밀 설정 (부록 1과 같은 복잡한 표 대응)
+      table_settings = {
+        "vertical_strategy": "text",   # 선을 기준으로 열 구분
+        "horizontal_strategy": "lines", # 선을 기준으로 행 구분
+        "intersection_tolerance": 15,     # 교차점 인식 범위 확대
+        "snap_tolerance": 4,            # 떨어진 선을 붙여서 인식하는 허용치
+        "join_tolerance": 4,
+        "text_x_tolerance": 3,
+      }
+      with pdfplumber.open(filepath) as pdf:
+        for page in pdf.pages:
+          # 1. 현재 페이지에서 테이블들을 찾고 좌표(bbox) 리스트를 생성합니다.
+          # 이 부분이 정의되어야 아래 filter에서 에러가 나지 않습니다.
+          tables = page.find_tables(table_settings=table_settings)
+          table_bboxes = [t.bbox for t in tables]
+          # 2. 필터 함수 정의 (table_bboxes를 참조하여 테이블 안에 있는지 판단)
+          def is_not_in_table(obj):
+            # 객체(글자 등)의 좌표 추출
+            obj_bbox = pdfplumber.utils.obj_to_bbox(obj)
+            for t_bbox in table_bboxes:
+              # 글자의 좌표가 테이블 영역(t_bbox) 안에 포함되는지 검사
+              # 미세한 오차를 줄이기 위해 +-1 정도의 여유를 둡니다.
+              if (obj_bbox[0] >= t_bbox[0] - 1 and 
+                obj_bbox[1] >= t_bbox[1] - 1 and 
+                obj_bbox[2] <= t_bbox[2] + 1 and 
+                obj_bbox[3] <= t_bbox[3] + 1):
+                  return False  # 테이블 안에 있으므로 제거 대상
+            return True  # 테이블 밖에 있으므로 유지 대상
+
+          # 3. 테이블 영역이 제거된 깨끗한 텍스트 추출
+          clean_text = page.filter(is_not_in_table).extract_text(x_tolerance=2, y_tolerance=2)
+          # 4. 테이블을 마크다운으로 별도 추출
+          md_tables = self.extract_table_as_markdown(page, table_settings)
+          # 5. 결합 (순서는 텍스트 후 테이블)
+          if clean_text:
+            text += clean_text.replace('\x00', '') + "\n"
+          if md_tables:
+            text += md_tables + "\n"
+      return text
+    
+    def parse_kosha_guide(self, text, filename):
+      """KOSHA 가이드 구조 파싱"""
+      # 1. 파일명에서 확장자 제거
+      base_name = os.path.splitext(filename)[0]
+      # 2. 정규표현식으로 ID와 타이틀 분리 # 예: A-180-2020, G-1-2023 등
+      match = re.match(r'^([A-Z]-\d+-\d+)\s*(.*)$', base_name)
+      filename_id = ""
+      filename_title = ""
+      if match:
+        filename_id = match.group(1).strip()
+        filename_title = match.group(2).strip()
+      else: # 파일명 패턴이 안 맞을 경우 전체를 타이틀로 일단 간주
+        filename_id = base_name
+        filename_title = base_name
+          
+      return {
+        "document_id": filename_id,
+        "title": filename_title,
+        "metadata": {
+          "guide_number": filename_id,
+          "publication_date": self._extract_date(text),
+          "publisher": "한국산업안전보건공단",
+          "authors": self._extract_authors(text),
+          "revision_history": self._extract_revision_history(text),
+          "related_regulation": self._extract_related_regulation(text)
+        },
+        "sections": self._parse_sections(text),
+        "forms": self._parse_forms(text)
+      }
     
     def _extract_date(self, text):
         patterns = [
@@ -271,16 +310,9 @@ class PDFProcessor:
         try:
           # filename = os.path.basename(filepath)
           text = self.extract_text_from_pdf(filepath)
-          parsed_data = self.parse_kosha_guide(text)
-          
-          filename_title = filename[:-4].replace(parsed_data['document_id'], "").strip()
-          parsed_data['title'] = filename_title
-          
+          parsed_data = self.parse_kosha_guide(text, filename)
           search_text = self.create_search_text(parsed_data)
           
-          if not parsed_data['document_id'] or 'KOSHA-' in parsed_data['document_id']:
-            parsed_data['document_id'] = filename[:10].replace(" ", "")
-            
           # 실제 OpenAI 임베딩 생성 (위에서 주석 해제 필요)
           embedding_vector = self.create_embedding(search_text)
           
@@ -472,17 +504,18 @@ class PDFProcessor:
             cur.close()
             conn.close()
       
-    def update_document(self, document_id, full_content):
+    def update_document(self, document_id, full_content, title):
       """사용자가 수정한 데이터를 DB에 반영"""
       conn = self.get_connection()
       cur = conn.cursor()
       try:
           cur.execute("""
             UPDATE kosha_guide
-            SET content = %s
+            SET content = %s, title = %s
             WHERE document_id = %s
           """, (
             json.dumps(full_content, ensure_ascii=False, default=self.json_default), 
+            title,
             document_id
           ))
           conn.commit()

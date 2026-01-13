@@ -93,8 +93,8 @@ def get_document(document_id):
         document = pdf_processor.get_document_by_id(document_id)
         if document:
           response_content = json.dumps({
-              'success': True,
-              'document': document
+            'success': True,
+            'document': document
           }, ensure_ascii=False, default=json_default, indent=4)
           res = make_response(response_content)
           res.headers['Content-Type'] = 'application/json; charset=utf-8'
@@ -119,7 +119,9 @@ def update_document(document_id):
           return jsonify({'success': False, 'error': '문서를 찾을 수 없습니다.'}), 404
 
       full_content = doc['content']
-
+      title = doc['title']
+      if 'title' in data:
+        title = data['title']
       # 2. 메타데이터 업데이트 (작성자, 경과, 법규 등)
       if 'metadata' in data:
         # 기존 metadata 딕셔너리에 새로운 내용을 덮어씁니다.
@@ -133,7 +135,7 @@ def update_document(document_id):
           full_content['sections'][idx]['content'] = update_item['content']
 
       # 4. DB에 저장 
-      success = pdf_processor.update_document(document_id, full_content)
+      success = pdf_processor.update_document(document_id, full_content, title)
 
       if success:
           return jsonify({'success': True})
