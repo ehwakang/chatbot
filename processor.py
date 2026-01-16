@@ -105,62 +105,80 @@ class PDFProcessor:
           sections.append(current_section)
       return sections
     
-    def extract_table_as_markdown(self, page, table_settings=None):
-      """페이지 내 테이블을 추출하여 마크다운 문자열로 변환하되, 헤더성 테이블은 제외"""
-      tables = page.extract_tables(table_settings=table_settings)
-      if not tables: return ""
-      md_output = ""
-      exclude_keywords = ["KOSHA GUIDE", "한국산업안전보건공단"] # 제외하고 싶은 헤더 키워드
-      for table in tables:
-        # 빈 표나 헤더만 있는 표 방지
-        all_cells = [str(cell) for row in table for cell in row if cell]
-        all_text = "".join(all_cells)
-        # 테이블의 모든 텍스트를 하나로 합쳐서 키워드 체크
-        if not all_text or any(kw in all_text for kw in exclude_keywords):
-          continue
+    # def extract_table_as_markdown(self, page, table_settings=None):
+    #   """페이지 내 테이블을 추출하여 마크다운 문자열로 변환하되, 헤더성 테이블은 제외"""
+    #   tables = page.extract_tables(table_settings=table_settings)
+    #   if not tables: return ""
+    #   md_output = ""
+    #   exclude_keywords = ["KOSHA GUIDE", "한국산업안전보건공단"] # 제외하고 싶은 헤더 키워드
+    #   for table in tables:
+    #     # 빈 표나 헤더만 있는 표 방지
+    #     all_cells = [str(cell) for row in table for cell in row if cell]
+    #     all_text = "".join(all_cells)
+    #     # 테이블의 모든 텍스트를 하나로 합쳐서 키워드 체크
+    #     if not all_text or any(kw in all_text for kw in exclude_keywords):
+    #       continue
         
-        # 마크다운 표 생성 로직
-        formatted_rows = []
-        for row in table:
-          # 셀 내 줄바꿈 제거 및 None 처리
-          clean_row = [str(cell).replace('\n', ' ').strip() if cell else "" for cell in row]
-          formatted_rows.append(clean_row)
-        if len(formatted_rows) < 1: continue
+    #     # 마크다운 표 생성 로직
+    #     formatted_rows = []
+    #     for row in table:
+    #       # 셀 내 줄바꿈 제거 및 None 처리
+    #       clean_row = [str(cell).replace('\n', ' ').strip() if cell else "" for cell in row]
+    #       formatted_rows.append(clean_row)
+    #     if len(formatted_rows) < 1: continue
         
-        md_table = "\n"
-        for i, row in enumerate(formatted_rows):
-          md_table += "| " + " | ".join(row) + " |\n"
-          if i == 0: # 마크다운 표 구분선
-            md_table += "| " + " | ".join(["---"] * len(row)) + " |\n"
-        md_output += md_table + "\n"
+    #     md_table = "\n"
+    #     for i, row in enumerate(formatted_rows):
+    #       md_table += "| " + " | ".join(row) + " |\n"
+    #       if i == 0: # 마크다운 표 구분선
+    #         md_table += "| " + " | ".join(["---"] * len(row)) + " |\n"
+    #     md_output += md_table + "\n"
           
-      return md_output
+    #   return md_output
+  
+    def extract_table_as_markdown(self, page, settings):
+      table_data = page.extract_table(settings)
+      if not table_data:
+        return ""
+      md_out = ""
+      for i, row in enumerate(table_data):
+        # None 값을 공백으로 치환하고 각 셀의 줄바꿈 제거
+        clean_row = [str(cell or "").replace("\n", " ").strip() for cell in row]
+        md_out += "| " + " | ".join(clean_row) + " |\n"
+        # 헤더 밑에 구분선 추가
+        if i == 0:
+            md_out += "| " + " | ".join(["---"] * len(clean_row)) + " |\n"
+      return md_out
   
     def extract_text_from_pdf(self, filepath):
       """PDF에서 텍스트와 테이블을 분리 추출하여 중복 없이 결합"""
       text = ""
       # 표 인식을 위한 정밀 설정 (부록 1과 같은 복잡한 표 대응)
       table_settings = {
-        "vertical_strategy": "text",   # 선을 기준으로 열 구분
+        "vertical_strategy": "lines",   # 선을 기준으로 열 구분
         "horizontal_strategy": "lines", # 선을 기준으로 행 구분
-        "intersection_tolerance": 15,     # 교차점 인식 범위 확대
-        "snap_tolerance": 4,            # 떨어진 선을 붙여서 인식하는 허용치
-        "join_tolerance": 4,
-        "text_x_tolerance": 3,
+        # "intersection_tolerance": 15,     # 교차점 인식 범위 확대
+        "snap_tolerance": 3,            # 떨어진 선을 붙여서 인식하는 허용치
+        "join_tolerance": 3,
+        "edge_min_length": 15,          # 너무 짧은 선은 무시
       }
       with pdfplumber.open(filepath) as pdf:
         for page in pdf.pages:
+          # 0. 페이지 상하단 노이즈 제거 (머리말/꼬리말 제외 영역 설정)
+          # 페이지 전체 높이의 상단 10%, 하단 10%를 제외한 영역만 사용
+          page_height = page.height
+          content_area = (0, page_height * 0.1, page.width, page_height * 0.9)
+          cropped_page = page.within_bbox(content_area)
           # 1. 현재 페이지에서 테이블들을 찾고 좌표(bbox) 리스트를 생성합니다.
           # 이 부분이 정의되어야 아래 filter에서 에러가 나지 않습니다.
-          tables = page.find_tables(table_settings=table_settings)
+          tables = cropped_page.find_tables(table_settings=table_settings)
           table_bboxes = [t.bbox for t in tables]
           # 2. 필터 함수 정의 (table_bboxes를 참조하여 테이블 안에 있는지 판단)
           def is_not_in_table(obj):
             # 객체(글자 등)의 좌표 추출
             obj_bbox = pdfplumber.utils.obj_to_bbox(obj)
             for t_bbox in table_bboxes:
-              # 글자의 좌표가 테이블 영역(t_bbox) 안에 포함되는지 검사
-              # 미세한 오차를 줄이기 위해 +-1 정도의 여유를 둡니다.
+              # 글자의 좌표가 테이블 영역(t_bbox) 안에 포함되는지 검사 : 미세한 오차를 줄이기 위해 +-1 정도의 여유를 둡니다.
               if (obj_bbox[0] >= t_bbox[0] - 1 and 
                 obj_bbox[1] >= t_bbox[1] - 1 and 
                 obj_bbox[2] <= t_bbox[2] + 1 and 
@@ -169,9 +187,9 @@ class PDFProcessor:
             return True  # 테이블 밖에 있으므로 유지 대상
 
           # 3. 테이블 영역이 제거된 깨끗한 텍스트 추출
-          clean_text = page.filter(is_not_in_table).extract_text(x_tolerance=2, y_tolerance=2)
+          clean_text = cropped_page.filter(is_not_in_table).extract_text()
           # 4. 테이블을 마크다운으로 별도 추출
-          md_tables = self.extract_table_as_markdown(page, table_settings)
+          md_tables = self.extract_table_as_markdown(cropped_page, table_settings)
           # 5. 결합 (순서는 텍스트 후 테이블)
           if clean_text:
             text += clean_text.replace('\x00', '') + "\n"
